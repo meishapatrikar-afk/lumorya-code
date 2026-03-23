@@ -1,50 +1,58 @@
 // Razorpay Integration
 
 export async function createRazorpayOrder(amount: number, orderId: string) {
-  // Production implementation with real Razorpay API
-  const response = await fetch('https://api.razorpay.com/v1/orders', {
+  const res = await fetch('/api/razorpay/create-order', {
     method: 'POST',
     headers: {
-      'Authorization': `Basic ${btoa(process.env.RAZORPAY_KEY_ID + ':' + process.env.RAZORPAY_KEY_SECRET)}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      amount: Math.round(amount * 100), // Amount in paise
-      currency: 'INR',
-      receipt: orderId,
+      amount,
+      orderId,
     }),
   });
 
-  if (!response.ok) {
+  if (!res.ok) {
     throw new Error('Failed to create Razorpay order');
   }
 
-  return response.json();
+  return res.json();
 }
 
-export async function verifyRazorpayPayment(
-  razorpayOrderId: string,
-  razorpayPaymentId: string,
-  razorpaySignature: string
-) {
-  // Verify payment signature with Razorpay
-  const crypto = require('crypto');
-  const expectedSignature = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-    .digest('hex');
-
-  if (expectedSignature === razorpaySignature) {
-    return {
-      success: true,
-      message: 'Payment verified successfully',
-      paymentId: razorpayPaymentId,
-    };
+export async function openRazorpayCheckout(
+  amount: number,
+  orderId: string,
+  user: {
+    name: string;
+    email: string;
+    contact: string;
   }
+) {
+  const order = await createRazorpayOrder(amount, orderId);
 
-  return {
-    success: false,
-    message: 'Payment verification failed',
-    paymentId: razorpayPaymentId,
+  const options = {
+    key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // 💥 important
+    amount: order.amount,
+    currency: 'INR',
+    name: 'Lumorya',
+    description: 'Order Payment',
+    order_id: order.id, // 💥 CRITICAL
+    handler: function (response: any) {
+      console.log('Payment success:', response);
+
+      // 👉 You can trigger success flow here
+      window.location.href = `/order-confirmation/${orderId}`;
+    },
+    prefill: {
+      name: user.name,
+      email: user.email,
+      contact: user.contact,
+    },
+    theme: {
+      color: '#000000',
+    },
   };
+
+  const rzp = new (window as any).Razorpay(options);
+  rzp.open();
 }
