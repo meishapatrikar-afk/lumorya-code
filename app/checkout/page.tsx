@@ -223,17 +223,22 @@ router.push(`/order-confirmation/${order.id}`);
 };
 
   const handleProcessPayment = async () => {
-    try {
-      setLoading(true);
-      setError('');
+  try {
+    setLoading(true);
+    setError('');
 
-      if (!shippingAddress.firstName || !shippingAddress.email || !shippingAddress.phone || !shippingAddress.address) {
-        setError('Please fill in all required fields');
-        return;
-      }
+    if (
+      !shippingAddress.firstName ||
+      !shippingAddress.email ||
+      !shippingAddress.phone ||
+      !shippingAddress.address
+    ) {
+      setError('Please fill in all required fields');
+      return;
+    }
 
-      const shippingCost = selectedShipping?.rate || 0;
-      const finalTotal = totalPrice + shippingCost;
+    const shippingCost = selectedShipping?.rate || 0;
+    const finalTotal = totalPrice + shippingCost;
 
       // Create Razorpay order via API
       const razorpayResponse = await fetch('/api/razorpay/create-order', {
