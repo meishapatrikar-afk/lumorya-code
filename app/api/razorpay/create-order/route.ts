@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,37 +26,23 @@ export async function POST(request: NextRequest) {
     const response = await fetch('https://api.razorpay.com/v1/orders', {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${auth}`,
+        Authorization: `Basic ${auth}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        amount: Math.round(amount * 100), // Convert to paise
+        amount: Math.round(amount * 100), // 💥 paise
         currency: 'INR',
         receipt: orderId,
       }),
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Razorpay error:', error);
-      return NextResponse.json(
-        { error: 'Failed to create Razorpay order' },
-        { status: response.status }
-      );
-    }
-
     const data = await response.json();
 
-    return NextResponse.json({
-      id: data.id,
-      amount: data.amount,
-      currency: data.currency,
-      receipt: data.receipt,
-    });
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('API error:', error);
+    console.error(error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to create order' },
       { status: 500 }
     );
   }
