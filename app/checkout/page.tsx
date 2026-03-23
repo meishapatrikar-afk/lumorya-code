@@ -173,52 +173,54 @@ export default function CheckoutPage() {
   shipmentId = shiprocketData.shipmentId;
 
   // 🚚 AUTO COURIER + AWB
-  try {
-    await fetch('/api/shiprocket/assign-awb', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shipmentId }),
-    });
-    console.log('🚚 AWB generated');
-  } catch (error) {
-    console.error('AWB error:', error);
-  }
+// 🚚 AUTO AWB
+try {
+  await fetch('/api/shiprocket/assign-awb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ shipmentId }),
+  });
+  console.log('🚚 AWB generated');
+} catch (error) {
+  console.error('AWB error:', error);
 }
-      // Create order
-      const order: Order = {
-        id: `ORD-${Date.now()}`,
-        userId: `guest_${Date.now()}`,
-        items: items,
-        totalAmount: finalTotal,
-        status: 'confirmed',
-        paymentStatus: 'completed',
-        paymentMethod: 'Test Payment',
-        paymentId: `TEST-${Date.now()}`,
-        razorpayOrderId: undefined,
-        shipmentId: shipmentId || undefined,
-        shippingAddress: shippingAddress,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
 
-      saveOrder(order);
-      
-      // Send confirmation emails (non-blocking)
-      try {
-        await handleNewOrder(order);
-      } catch (error) {
-        console.error('[v0] Email notification error:', error);
-      }
-      
-      clearCart();
-      router.push(`/order-confirmation/${order.id}`);
-    } catch (err) {
-      setError('Payment processing failed. Please try again.');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+// Create order
+const order: Order = {
+  id: `ORD-${Date.now()}`,
+  userId: `guest_${Date.now()}`,
+  items: items,
+  totalAmount: finalTotal,
+  status: 'confirmed',
+  paymentStatus: 'completed',
+  paymentMethod: 'Test Payment',
+  paymentId: `TEST-${Date.now()}`,
+  razorpayOrderId: undefined,
+  shipmentId: shipmentId || undefined,
+  shippingAddress: shippingAddress,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+saveOrder(order);
+
+// Send confirmation emails (non-blocking)
+try {
+  await handleNewOrder(order);
+} catch (error) {
+  console.error('[v0] Email notification error:', error);
+}
+
+clearCart();
+router.push(`/order-confirmation/${order.id}`);
+
+} catch (err) {
+  setError('Payment processing failed. Please try again.');
+  console.error(err);
+} finally {
+  setLoading(false);
+}
+};
 
   const handleProcessPayment = async () => {
     try {
