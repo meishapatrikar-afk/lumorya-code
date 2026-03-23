@@ -219,7 +219,6 @@ router.push(`/order-confirmation/${order.id}`);
   console.error(err);
 } finally {
   setLoading(false);
-}
 };
 
   const handleProcessPayment = async () => {
