@@ -247,78 +247,86 @@ export default function CheckoutPage() {
 
       // Open Razorpay payment modal
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
-        amount: Math.round(finalTotal * 100), // Amount in paise
+        key:"rzp_test_STuF9msM2bBppP",
+        amount: razorpayOrder.amount, 
         currency: 'INR',
         name: 'Lumorya Candles',
         description: `Order for ${items.length} item(s)`,
         order_id: razorpayOrder.id,
         customer_notif: 1,
         handler: async function (response: any) {
-          try {
-            // Payment successful, now create the order
-            // Create order in Shiprocket for shipping (optional, non-blocking)
-            let shipmentId = null;
-            try {
-              const shiprocketResponse = await fetch('/api/shiprocket/create-order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  orderId: `order_${Date.now()}`,
-                  orderDate: new Date().toISOString(),
-                  customerName: shippingAddress.firstName,
-                  customerEmail: shippingAddress.email,
-                  customerPhone: shippingAddress.phone,
-                  address: shippingAddress.address,
-                  city: shippingAddress.city,
-                  state: shippingAddress.state,
-                  zipCode: shippingAddress.zipCode,
-                  items: items,
-                  totalAmount: finalTotal,
-                }),
-              });
+  try {
+    console.log("✅ Payment success:", response);
 
-              if (shiprocketResponse.ok) {
-                const shiprocketData = await shiprocketResponse.json();
-                shipmentId = shiprocketData.success ? shiprocketData.shipmentId : null;
-              }
-            } catch (error) {
-              console.error('Shiprocket error (non-blocking):', error);
-            }
+    // 🔥 Generate consistent orderId ONCE
+    const finalOrderId = `ORD-${Date.now()}`;
 
-            // Create order with guest checkout
-            const order: Order = {
-              id: `ORD-${Date.now()}`,
-              userId: `guest_${Date.now()}`,
-              items: items,
-              totalAmount: finalTotal,
-              status: 'confirmed',
-              paymentStatus: 'completed',
-              paymentMethod: 'Razorpay',
-              paymentId: response.razorpay_payment_id,
-              razorpayOrderId: response.razorpay_order_id,
-              shipmentId: shipmentId || undefined,
-              shippingAddress: shippingAddress,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            };
+    // 🔹 Shiprocket (non-blocking but safer)
+    let shipmentId = null;
 
-            saveOrder(order);
-            
-            // Send confirmation emails (non-blocking)
-            try {
-              await handleNewOrder(order);
-            } catch (error) {
-              console.error('[v0] Email notification error:', error);
-            }
-            
-            clearCart();
-            router.push(`/order-confirmation/${order.id}`);
-          } catch (err) {
-            setError('Failed to save order. Please try again.');
-            console.error('Order creation error:', err);
-          }
-        },
+    try {
+      const shiprocketResponse = await fetch('/api/shiprocket/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: finalOrderId, // 🔥 FIXED (same ID everywhere)
+          orderDate: new Date().toISOString(),
+          customerName: shippingAddress.firstName,
+          customerEmail: shippingAddress.email,
+          customerPhone: shippingAddress.phone,
+          address: shippingAddress.address,
+          city: shippingAddress.city,
+          state: shippingAddress.state,
+          zipCode: shippingAddress.zipCode,
+          items: items,
+          totalAmount: finalTotal,
+        }),
+      });
+
+      if (shiprocketResponse.ok) {
+        const shiprocketData = await shiprocketResponse.json();
+        shipmentId = shiprocketData.success ? shiprocketData.shipmentId : null;
+      }
+    } catch (error) {
+      console.error('Shiprocket error (non-blocking):', error);
+    }
+
+    // 🔹 Create final order (IMPORTANT: use SAME ID)
+    const order: Order = {
+      id: finalOrderId,
+      userId: `guest_${Date.now()}`,
+      items: items,
+      totalAmount: finalTotal,
+      status: 'confirmed',
+      paymentStatus: 'completed',
+      paymentMethod: 'Razorpay',
+      paymentId: response.razorpay_payment_id,
+      razorpayOrderId: response.razorpay_order_id,
+      shipmentId: shipmentId || undefined,
+      shippingAddress: shippingAddress,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    saveOrder(order);
+
+    // 🔹 Email (non-blocking)
+    try {
+      await handleNewOrder(order);
+    } catch (error) {
+      console.error('Email error:', error);
+    }
+
+    clearCart();
+
+    // 🔥 Redirect using SAME orderId
+    router.push(`/order-confirmation/${finalOrderId}`);
+
+  } catch (err) {
+    console.error('Order creation error:', err);
+    setError('Failed to save order. Please try again.');
+  }
+},
         prefill: {
           name: shippingAddress.firstName,
           email: shippingAddress.email,
