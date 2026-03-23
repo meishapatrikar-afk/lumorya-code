@@ -169,16 +169,21 @@ export default function CheckoutPage() {
         const shiprocketData = await shiprocketResponse.json();
         console.log('[v0] Shiprocket response:', shiprocketData);
 
-        if (shiprocketResponse.ok && shiprocketData.success) {
-          shipmentId = shiprocketData.shipmentId;
-          console.log('[v0] Order sent to Shiprocket successfully, shipment:', shipmentId);
-        } else {
-          console.warn('[v0] Shiprocket warning:', shiprocketData.error || 'Order not created');
-        }
-      } catch (error) {
-        console.error('[v0] Shiprocket error (non-blocking):', error);
-      }
+       if (shiprocketResponse.ok && shiprocketData.success) {
+  shipmentId = shiprocketData.shipmentId;
 
+  // 🚚 AUTO COURIER + AWB
+  try {
+    await fetch('/api/shiprocket/assign-awb', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shipmentId }),
+    });
+    console.log('🚚 AWB generated');
+  } catch (error) {
+    console.error('AWB error:', error);
+  }
+}
       // Create order
       const order: Order = {
         id: `ORD-${Date.now()}`,
