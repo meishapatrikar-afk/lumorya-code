@@ -7,25 +7,24 @@ let tokenExpiryTime: number = 0;
 
 async function getAuthToken(): Promise<string | null> {
   try {
-    // Read environment variables at RUNTIME, not module load time
     const SHIPROCKET_EMAIL = process.env.SHIPROCKET_API_EMAIL;
     const SHIPROCKET_PASSWORD = process.env.SHIPROCKET_API_PASSWORD;
 
     if (!SHIPROCKET_EMAIL || !SHIPROCKET_PASSWORD) {
-      console.error('[v0] Shiprocket auth failed - no email/password provided');
+      console.error('❌ Shiprocket credentials missing');
       return null;
     }
 
+    // Use cached token if valid
     if (cachedAuthToken && Date.now() < tokenExpiryTime) {
       return cachedAuthToken;
     }
 
-    console.log('[v0] Authenticating with Shiprocket...');
+    console.log('🔐 Authenticating with Shiprocket...');
+
     const response = await fetch(`${SHIPROCKET_API_BASE}/auth/login`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: SHIPROCKET_EMAIL,
         password: SHIPROCKET_PASSWORD,
@@ -33,7 +32,7 @@ async function getAuthToken(): Promise<string | null> {
     });
 
     if (!response.ok) {
-      console.error('[v0] Shiprocket auth failed:', response.statusText);
+      console.error('❌ Shiprocket auth failed:', response.statusText);
       return null;
     }
 
@@ -41,15 +40,15 @@ async function getAuthToken(): Promise<string | null> {
 
     if (data.token) {
       cachedAuthToken = data.token;
-      tokenExpiryTime = Date.now() + (23 * 60 * 60 * 1000);
-      console.log('[v0] Shiprocket auth successful');
+      tokenExpiryTime = Date.now() + 23 * 60 * 60 * 1000; // 23 hours
+      console.log('✅ Shiprocket auth success');
       return data.token;
     }
 
-    console.error('[v0] No token received from Shiprocket');
+    console.error('❌ No token received');
     return null;
   } catch (error) {
-    console.error('[v0] Shiprocket auth error:', error);
+    console.error('❌ Auth error:', error);
     return null;
   }
 }
@@ -57,6 +56,7 @@ async function getAuthToken(): Promise<string | null> {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
     const {
       orderId,
       orderDate,
@@ -74,80 +74,113 @@ export async function POST(request: NextRequest) {
     const authToken = await getAuthToken();
 
     if (!authToken) {
-      console.error('[v0] Shiprocket auth failed - no email/password provided');
-      return NextResponse.json({
-        success: false,
-        shipmentId: null,
-        error: 'Shiprocket credentials not configured',
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          success: false,
+          shipmentId: null,
+          error: 'Shiprocket authentication failed',
+        },
+        { status: 500 }
+      );
     }
 
+    // 🔥 CORRECT PAYLOAD
     const shiprocketPayload = {
       order_id: orderId,
       order_date: orderDate,
-      pickup_location: 'Nagpur',
+      pickup_location: "Primary",
+
+      // Billing
       billing_customer_name: customerName,
-      billing_last_name: '',
+      billing_last_name: "",
       billing_address: address,
-      billing_address_2: '',
+      billing_address_2: "",
       billing_city: city,
       billing_pincode: zipCode,
       billing_state: state,
-      billing_country: 'India',
+      billing_country: "India",
       billing_email: customerEmail,
       billing_phone: customerPhone,
-      shipping_is_bill: 1,
+
+      // Shipping
+      shipping_is_billing: true,
+      shipping_customer_name: customerName,
+      shipping_address: address,
+      shipping_city: city,
+      shipping_pincode: zipCode,
+      shipping_state: state,
+      shipping_country: "India",
+      shipping_email: customerEmail,
+      shipping_phone: customerPhone,
+
+      // Items
       order_items: items.map((item: any) => ({
         name: item.name,
-        quantity: item.cartQuantity,
-        price: item.price,
+        sku: item.id || `SKU-${item.name}`,
+        units: item.cartQuantity,
+        selling_price: item.price,
       })),
-      payment_method: 'Prepaid',
+
+      payment_method: "Prepaid",
       sub_total: totalAmount,
+
+      // Package details
       length: 10,
       breadth: 10,
       height: 10,
-      weight: items.reduce((sum: number, item: any) => sum + (item.weight || 0.5) * item.cartQuantity, 0),
-      channel_id: 10277489,
+      weight: items.reduce(
+        (sum: number, item: any) =>
+          sum + (item.weight || 0.5) * item.cartQuantity,
+        0
+      ),
     };
 
-    console.log('[v0] Creating Shiprocket order:', shiprocketPayload);
+    console.log('📦 Creating Shiprocket order:', shiprocketPayload);
 
     const response = await fetch(`${SHIPROCKET_API_BASE}/orders/create/adhoc`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(shiprocketPayload),
     });
 
     const data = await response.json();
-    console.log('[v0] Shiprocket response:', { status: response.status, ok: response.ok, data });
 
-    if (response.ok && data.data?.shipment_id) {
-      console.log('[v0] Order created successfully in Shiprocket:', data.data.shipment_id);
+    console.log('📡 Shiprocket response:', data);
+
+    if (response.ok && data?.shipment_id) {
+      console.log('✅ Order created in Shiprocket:', data.shipment_id);
+
       return NextResponse.json({
         success: true,
-        shipmentId: data.data.shipment_id,
-        orderId: data.data.order_id,
+        shipmentId: data.shipment_id,
+        orderId: data.order_id,
         status: 'created',
       });
     }
 
-    console.error('[v0] Shiprocket API error response:', data);
-    console.error('[v0] Shiprocket error:', data.message || 'Failed to create order');
-    return NextResponse.json({
-      success: false,
-      shipmentId: null,
-      error: data.message || 'Failed to create order in Shiprocket',
-    }, { status: 500 });
+    console.error('❌ Shiprocket API error:', data);
+
+    return NextResponse.json(
+      {
+        success: false,
+        shipmentId: null,
+        error: data?.message || 'Failed to create order',
+      },
+      { status: 500 }
+    );
   } catch (error) {
-    console.error('[v0] Shiprocket API error:', error);
-    return NextResponse.json({
-      success: false,
-      shipmentId: null,
-      error: 'Internal server error',
-    }, { status: 500 });
+    console.error('❌ Internal error:', error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        shipmentId: null,
+        error: 'Internal server error',
+      },
+      { status: 500 }
+    );
   }
 }
