@@ -1,7 +1,7 @@
 import { Order } from '@/lib/types';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = 'contact@lumorya.in';   // use your existing mailbox
+const FROM_EMAIL = 'onboarding@resend.dev';   // use your existing mailbox
 const ADMIN_EMAIL = 'meishapatrikar@gmail.com';  // same inbox for admin notifications
 
 async function sendEmail(payload: any) {
