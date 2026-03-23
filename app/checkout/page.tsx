@@ -250,102 +250,107 @@ export default function CheckoutPage() {
 
       const razorpayOrder = await razorpayResponse.json();
 
-      // Open Razorpay payment modal
-      const options = {
-        key:"rzp_test_STuF9msM2bBppP",
-        amount: razorpayOrder.amount, 
-        currency: 'INR',
-        name: 'Lumorya Candles',
-        description: `Order for ${items.length} item(s)`,
-        order_id: razorpayOrder.id,
-        customer_notif: 1,
-      handler: async function (response: any) {
-  try {
-    console.log("✅ Payment success:", response);
+const options = {
+  key: "rzp_test_STuF9msM2bBppP",
+  amount: razorpayOrder.amount,
+  currency: 'INR',
+  name: 'Lumorya Candles',
+  description: `Order for ${items.length} item(s)`,
+  order_id: razorpayOrder.id,
+  customer_notif: 1,
 
-    const finalOrderId = `ORD-${Date.now()}`;
-    let shipmentId = null;
-
-    // 🚚 CREATE SHIPROCKET ORDER
+  handler: async function (response: any) {
     try {
-      const shiprocketResponse = await fetch('/api/shiprocket/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: finalOrderId,
-          orderDate: new Date().toISOString(),
-          customerName: shippingAddress.firstName,
-          customerEmail: shippingAddress.email,
-          customerPhone: shippingAddress.phone,
-          address: shippingAddress.address,
-          city: shippingAddress.city,
-          state: shippingAddress.state,
-          zipCode: shippingAddress.zipCode,
-          items: items,
-          totalAmount: finalTotal,
-        }),
-      });
+      console.log("✅ Payment success:", response);
 
-      if (shiprocketResponse.ok) {
-        const shiprocketData = await shiprocketResponse.json();
+      const finalOrderId = `ORD-${Date.now()}`;
+      let shipmentId = null;
 
-        if (shiprocketData.success) {
-          shipmentId = shiprocketData.shipmentId;
+      try {
+        const shiprocketResponse = await fetch('/api/shiprocket/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: finalOrderId,
+            orderDate: new Date().toISOString(),
+            customerName: shippingAddress.firstName,
+            customerEmail: shippingAddress.email,
+            customerPhone: shippingAddress.phone,
+            address: shippingAddress.address,
+            city: shippingAddress.city,
+            state: shippingAddress.state,
+            zipCode: shippingAddress.zipCode,
+            items: items,
+            totalAmount: finalTotal,
+          }),
+        });
 
-          // 🔥 AUTO COURIER ASSIGN + AWB
-          try {
-            await fetch('/api/shiprocket/assign-awb', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ shipmentId }),
-            });
+        if (shiprocketResponse.ok) {
+          const shiprocketData = await shiprocketResponse.json();
 
-            console.log("🚚 AWB generated successfully");
-          } catch (err) {
-            console.error("AWB assignment failed:", err);
+          if (shiprocketData.success) {
+            shipmentId = shiprocketData.shipmentId;
+
+            try {
+              await fetch('/api/shiprocket/assign-awb', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shipmentId }),
+              });
+
+              console.log("🚚 AWB generated successfully");
+            } catch (err) {
+              console.error("AWB assignment failed:", err);
+            }
           }
         }
+      } catch (error) {
+        console.error('Shiprocket error:', error);
       }
-    } catch (error) {
-      console.error('Shiprocket error:', error);
+
+      const order: Order = {
+        id: finalOrderId,
+        userId: `guest_${Date.now()}`,
+        items: items,
+        totalAmount: finalTotal,
+        status: 'confirmed',
+        paymentStatus: 'completed',
+        paymentMethod: 'Razorpay',
+        paymentId: response.razorpay_payment_id,
+        razorpayOrderId: response.razorpay_order_id,
+        shipmentId: shipmentId || undefined,
+        shippingAddress: shippingAddress,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      saveOrder(order);
+
+      try {
+        await handleNewOrder(order);
+      } catch (error) {
+        console.error('Email error:', error);
+      }
+
+      clearCart();
+      router.push(`/order-confirmation/${finalOrderId}`);
+
+    } catch (err) {
+      console.error('Order creation error:', err);
+      setError('Failed to save order. Please try again.');
     }
+  }, // ✅ THIS COMMA IS CRITICAL
 
-    // 📦 SAVE ORDER
-    const order: Order = {
-      id: finalOrderId,
-      userId: `guest_${Date.now()}`,
-      items: items,
-      totalAmount: finalTotal,
-      status: 'confirmed',
-      paymentStatus: 'completed',
-      paymentMethod: 'Razorpay',
-      paymentId: response.razorpay_payment_id,
-      razorpayOrderId: response.razorpay_order_id,
-      shipmentId: shipmentId || undefined,
-      shippingAddress: shippingAddress,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  prefill: {
+    name: shippingAddress.firstName,
+    email: shippingAddress.email,
+    contact: shippingAddress.phone,
+  },
 
-    saveOrder(order);
-
-    // 📩 EMAIL
-    try {
-      await handleNewOrder(order);
-    } catch (error) {
-      console.error('Email error:', error);
-    }
-
-    clearCart();
-
-    // 🔥 REDIRECT
-    router.push(`/order-confirmation/${finalOrderId}`);
-
-  } catch (err) {
-    console.error('Order creation error:', err);
-    setError('Failed to save order. Please try again.');
-  }
-},
+  theme: {
+    color: '#8B7355',
+  },
+};
      
         prefill: {
           name: shippingAddress.firstName,
