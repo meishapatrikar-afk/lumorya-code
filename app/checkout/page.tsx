@@ -259,22 +259,20 @@ export default function CheckoutPage() {
         description: `Order for ${items.length} item(s)`,
         order_id: razorpayOrder.id,
         customer_notif: 1,
-        handler: async function (response: any) {
+      handler: async function (response: any) {
   try {
     console.log("✅ Payment success:", response);
 
-    // 🔥 Generate consistent orderId ONCE
     const finalOrderId = `ORD-${Date.now()}`;
-
-    // 🔹 Shiprocket (non-blocking but safer)
     let shipmentId = null;
 
+    // 🚚 CREATE SHIPROCKET ORDER
     try {
       const shiprocketResponse = await fetch('/api/shiprocket/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: finalOrderId, // 🔥 FIXED (same ID everywhere)
+          orderId: finalOrderId,
           orderDate: new Date().toISOString(),
           customerName: shippingAddress.firstName,
           customerEmail: shippingAddress.email,
@@ -290,13 +288,29 @@ export default function CheckoutPage() {
 
       if (shiprocketResponse.ok) {
         const shiprocketData = await shiprocketResponse.json();
-        shipmentId = shiprocketData.success ? shiprocketData.shipmentId : null;
+
+        if (shiprocketData.success) {
+          shipmentId = shiprocketData.shipmentId;
+
+          // 🔥 AUTO COURIER ASSIGN + AWB
+          try {
+            await fetch('/api/shiprocket/assign-awb', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ shipmentId }),
+            });
+
+            console.log("🚚 AWB generated successfully");
+          } catch (err) {
+            console.error("AWB assignment failed:", err);
+          }
+        }
       }
     } catch (error) {
-      console.error('Shiprocket error (non-blocking):', error);
+      console.error('Shiprocket error:', error);
     }
 
-    // 🔹 Create final order (IMPORTANT: use SAME ID)
+    // 📦 SAVE ORDER
     const order: Order = {
       id: finalOrderId,
       userId: `guest_${Date.now()}`,
@@ -315,7 +329,7 @@ export default function CheckoutPage() {
 
     saveOrder(order);
 
-    // 🔹 Email (non-blocking)
+    // 📩 EMAIL
     try {
       await handleNewOrder(order);
     } catch (error) {
@@ -324,7 +338,7 @@ export default function CheckoutPage() {
 
     clearCart();
 
-    // 🔥 Redirect using SAME orderId
+    // 🔥 REDIRECT
     router.push(`/order-confirmation/${finalOrderId}`);
 
   } catch (err) {
@@ -332,6 +346,7 @@ export default function CheckoutPage() {
     setError('Failed to save order. Please try again.');
   }
 },
+     
         prefill: {
           name: shippingAddress.firstName,
           email: shippingAddress.email,
