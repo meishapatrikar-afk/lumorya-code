@@ -16,25 +16,26 @@ export default function OrderConfirmationPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const orders = getAllOrders();
-    const foundOrder = orders.find((o) => o.id === orderId);
-    setOrder(foundOrder || null);
-    if (foundOrder) {
-      fetch("https://webhook.site/4130f67e-8ad1-4256-b703-0706accfe873", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(foundOrder),
-      })
-        .then(res => res.text())
-        .then(data => console.log("Webhook sent:", data))
-        .catch(err => console.error("Webhook error:", err));
-    }
-    setLoading(false);
-  }, [orderId]);
+ useEffect(() => {
+  const orders = getAllOrders();
+  const foundOrder = orders.find((o) => o.id === orderId);
 
+  setOrder(foundOrder || null);
+  setLoading(false);
+
+  if (foundOrder) {
+    fetch('/api/send-order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(foundOrder),
+    })
+      .then(res => res.json())
+      .then(data => console.log('✅ Email trigger:', data))
+      .catch(err => console.error('❌ Error:', err));
+  }
+}, [orderId]);
   if (loading) {
     return (
       <>
